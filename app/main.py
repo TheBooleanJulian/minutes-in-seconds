@@ -243,12 +243,10 @@ def _run_job(job_id: str):
         job["speakers"] = transcript.speakers
 
         if cfg["cleanup"]:
-            cb("AI cleanup & summary...", 88)
-            transcript = ai_cleanup_transcript(transcript)
+            transcript = ai_cleanup_transcript(transcript, progress_cb=cb)
             job["transcript"] = transcript
 
-        cb("Exporting files...", 95)
-        _export_outputs(job_id)
+        _export_outputs(job_id, cb)
 
         job["status"] = "done"
         job["step"] = "Complete!"
@@ -270,14 +268,19 @@ def _run_job(job_id: str):
             pass
 
 
-def _export_outputs(job_id: str):
+def _export_outputs(job_id: str, cb=None):
     job = jobs[job_id]
     transcript = job["transcript"]
     cfg = job["config"]
     stem = cfg["title"].replace(" ", "_").replace("/", "-")
+    fmts = cfg["output_formats"]
     out = {}
 
-    for fmt in cfg["output_formats"]:
+    base_pct = 95
+    for i, fmt in enumerate(fmts):
+        pct = base_pct + int((i / max(len(fmts), 1)) * 4)
+        if cb:
+            cb(f"Exporting {fmt.upper()}...", pct)
         path = str(OUTPUT_DIR / f"{job_id}_{stem}.{fmt}")
         if fmt == "txt":
             export_txt(transcript, path)

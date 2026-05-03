@@ -231,34 +231,52 @@ def run_pipeline(
     with tempfile.TemporaryDirectory() as tmp_dir:
 
         # 1. Extract
-        cb("Extracting audio...", 5)
+        cb("Remuxing to 16 kHz mono WAV...", 3)
         wav_path = extract_audio(str(source), tmp_dir)
         duration = get_duration(wav_path)
+        cb(f"Audio ready — {fmt_time(duration)} total", 10)
 
         # 2. Denoise
         if denoise:
-            cb("Denoising audio...", 12)
+            cb("Reading audio samples for noise profile...", 12)
+            cb("Applying spectral noise reduction...", 13)
             wav_path = denoise_audio(wav_path, tmp_dir)
+            cb("Noise reduction complete", 17)
 
         # 3. Diarize
-        cb("Detecting speakers...", 18)
+        hf_token = os.environ.get("HF_TOKEN")
+        if hf_token:
+            cb("Loading pyannote diarization model...", 18)
+        else:
+            cb("No HF_TOKEN — splitting into 30s chunks...", 18)
+
         raw_segments = diarize(wav_path, num_speakers)
         if raw_segments is None:
             raw_segments = fallback_segments(duration)
+            cb(f"Split into {len(raw_segments)} × 30s chunks", 22)
+        else:
+            n_spk = len(set(s[0] for s in raw_segments))
+            cb(f"Detected {n_spk} speaker(s) — merging short turns...", 22)
 
         raw_segments = merge_short_segments(raw_segments)
+        n = len(raw_segments)
         speaker_map = build_speaker_map(raw_segments)
+        cb(f"{len(speaker_map)} speaker(s) · {n} segment(s) queued", 24)
 
         # 4. Load Whisper
-        cb(f"Loading Whisper ({model_size})...", 25)
+        if model_size in _whisper_model_cache:
+            cb(f"Whisper '{model_size}' already in memory", 26)
+        else:
+            cb(f"Loading Whisper '{model_size}' weights...", 25)
         model = load_whisper_model(model_size)
+        cb(f"Whisper '{model_size}' ready", 28)
 
         # 5. Transcribe
         utterances = []
-        n = len(raw_segments)
         for i, (speaker, start, end) in enumerate(raw_segments):
-            pct = 25 + int((i / n) * 60)
-            cb(f"Transcribing segment {i+1}/{n}...", pct)
+            pct = 28 + int((i / n) * 57)
+            label = speaker_map.get(speaker, speaker)
+            cb(f"[{fmt_time(start)} → {fmt_time(end)}] {label} · {i+1}/{n}", pct)
             text, lang = transcribe_segment(model, wav_path, start, end)
             if text:
                 utterances.append(Utterance(
@@ -281,7 +299,11 @@ def run_pipeline(
 
 # ─── AI cleanup ───────────────────────────────────────────────────────────────
 
-def ai_cleanup_transcript(transcript: Transcript) -> Transcript:
+def ai_cleanup_transcript(transcript: Transcript, progress_cb: Optional[Callable] = None) -> Transcript:
+    def cb(step, pct):
+        if progress_cb:
+            progress_cb(step, pct)
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return transcript
@@ -297,6 +319,7 @@ def ai_cleanup_transcript(transcript: Transcript) -> Transcript:
         ]
         raw_text = "\n".join(raw_lines)
 
+        cb("AI cleanup — fixing punctuation & removing filler words...", 88)
         cleanup = client.messages.create(
             model="claude-haiku-4-5",
             max_tokens=4096,
@@ -328,7 +351,7 @@ TRANSCRIPT:
         if new_utts:
             transcript.utterances = new_utts
 
-        # Summary
+        cb("Generating meeting summary...", 92)
         summary = client.messages.create(
             model="claude-haiku-4-5",
             max_tokens=512,
