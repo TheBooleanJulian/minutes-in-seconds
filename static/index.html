@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minutes in Seconds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --teal:       #00d4c8;
+      --teal-dim:   #00a89e;
+      --teal-glow:  rgba(0, 212, 200, 0.18);
+      --teal-faint: rgba(0, 212, 200, 0.06);
+      --bg:         #060910;
+      --surface:    #0d1117;
+      --surface-2:  #141b24;
+      --surface-3:  #1b2535;
+      --border:     rgba(0, 212, 200, 0.12);
+      --border-dim: rgba(255,255,255,0.06);
+      --text:       #e8edf2;
+      --text-muted: #6b7f96;
+      --text-faint: #3d4f62;
+      --font:       'Space Grotesk', sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+      --display:    'Syne', sans-serif;
+      --radius:     12px;
+      --radius-sm:  8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background grid ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,200,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,200,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ── Ambient glow ── */
+    body::after {
+      content: '';
+      position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 500px; z-index: 0;
+      background: radial-gradient(ellipse, rgba(0,212,200,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Header ── */
+    header {
+      padding: 48px 0 32px;
+      text-align: center;
+    }
+
+    .logo-mark {
+      display: inline-flex; align-items: center; gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: var(--teal);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--teal);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-family: var(--display);
+      font-size: clamp(36px, 6vw, 58px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      margin-bottom: 14px;
+    }
+
+    h1 span { color: var(--teal); }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    /* ── Pills ── */
+    .pills {
+      display: flex; gap: 8px; justify-content: center;
+      flex-wrap: wrap; margin-top: 20px;
+    }
+
+    .pill {
+      background: var(--teal-faint);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--teal);
+      font-family: var(--mono);
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--teal), transparent);
+      opacity: 0.5;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--teal);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    /* ── Drop zone ── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 52px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--teal-faint);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--teal);
+      background: var(--teal-glow);
+      transform: translateY(-1px);
+    }
+
+    #drop-zone .dz-icon { font-size: 40px; margin-bottom: 12px; }
+
+    #drop-zone .dz-title {
+      font-size: 17px; font-weight: 600; margin-bottom: 6px;
+    }
+
+    #drop-zone .dz-sub {
+      font-size: 13px; color: var(--text-muted);
+    }
+
+    #drop-zone .dz-formats {
+      margin-top: 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+
+    #file-input { display: none; }
+
+    .file-chosen {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-top: 14px;
+    }
+
+    .file-chosen.visible { display: flex; }
+    .file-chosen .fc-icon { font-size: 22px; }
+    .file-chosen .fc-name { flex: 1; font-size: 14px; font-weight: 500; }
+    .file-chosen .fc-size { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+    .fc-remove {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 18px; padding: 0 4px;
+      transition: color 0.15s;
+    }
+    .fc-remove:hover { color: #f87171; }
+
+    /* ── Settings grid ── */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    input[type="text"], input[type="number"], select {
+      background: var(--surface-2);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      width: 100%;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: var(--teal);
+    }
+
+    select option { background: var(--surface-2); }
+
+    /* ── Checkboxes & toggles ── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .toggle-row:hover { border-color: var(--teal); }
+
+    .toggle-label { font-size: 14px; }
+    .toggle-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .toggle-switch {
+      width: 40px; height: 22px;
+      background: var(--surface-3);
+      border-radius: 100px;
+      border: 1px solid var(--border-dim);
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .toggle-switch.on {
+      background: var(--teal);
+      border-color: var(--teal);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch.on::after { transform: translateX(18px); }
+
+    /* ── Format checkboxes ── */
+    .format-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .fmt-btn {
+      display: flex; align-items: center; gap: 7px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      padding: 9px 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: var(--mono);
+      user-select: none;
+    }
+
+    .fmt-btn:hover { border-color: var(--teal); color: var(--text); }
+    .fmt-btn.selected { border-color: var(--teal); background: var(--teal-faint); color: var(--teal); }
+    .fmt-btn .fmt-icon { font-size: 16px; }
+
+    /* ── Submit ── */
+    #submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--teal);
+      color: #060910;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.01em;
+      margin-top: 4px;
+    }
+
+    #submit-btn:hover:not(:disabled) {
+      background: #00f0e2;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 30px rgba(0,212,200,0.3);
+    }
+
+    #submit-btn:disabled {
+      opacity: 0.4; cursor: not-allowed; transform: none;
+    }
+
+    /* ── Progress card ── */
+    #progress-card { display: none; }
+    #progress-card.visible { display: block; }
+
+    .progress-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+
+    .progress-filename {
+      font-size: 14px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .status-badge {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 3px 10px;
+      border-radius: 100px;
+      border: 1px solid;
+      flex-shrink: 0;
+    }
+
+    .status-badge.processing { color: var(--teal); border-color: var(--teal); background: var(--teal-faint); }
+    .status-badge.done { color: #4ade80; border-color: #4ade80; background: rgba(74,222,128,0.08); }
+    .status-badge.error { color: #f87171; border-color: #f87171; background: rgba(248,113,113,0.08); }
+    .status-badge.cancelled { color: var(--text-muted); border-color: var(--border-dim); }
+
+    .progress-bar-wrap {
+      background: var(--surface-2);
+      border-radius: 100px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal-dim), var(--teal));
+      border-radius: 100px;
+      transition: width 0.4s ease;
+      width: 0%;
+      position: relative;
+    }
+
+    .progress-bar::after {
+      content: '';
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 40px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer { 0%,100% { opacity:0 } 50% { opacity:1 } }
+
+    .progress-step {
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+    }
+
+    #cancel-btn {
+      background: none;
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 12px; font-family: var(--mono);
+      padding: 5px 12px; cursor: pointer;
+      margin-top: 12px;
+      transition: all 0.15s;
+    }
+    #cancel-btn:hover { border-color: #f87171; color: #f87171; }
+
+    /* ── Results ── */
+    #results-card { display: none; }
+    #results-card.visible { display: block; }
+
+    /* ── Speaker labels ── */
+    .speakers-section { margin-bottom: 20px; }
+
+    .speakers-grid {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .speaker-row {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+    }
+
+    .speaker-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%; flex-shrink: 0;
+    }
+
+    .speaker-row input[type="text"] {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-dim);
+      border-radius: 0;
+      padding: 2px 4px;
+      font-size: 14px; font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .speaker-row input[type="text"]:focus {
+      border-color: var(--teal);
+    }
+
+    .speaker-save-btn {
+      background: none;
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 11px; font-family: var(--mono);
+      padding: 4px 10px; cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .speaker-save-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+    /* ── Downloads ── */
+    .downloads-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    .dl-btn {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      text-decoration: none;
+      color: var(--text);
+      transition: all 0.2s;
+      flex: 1; min-width: 140px;
+    }
+
+    .dl-btn:hover {
+      border-color: var(--teal);
+      background: var(--teal-faint);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--teal-glow);
+    }
+
+    .dl-icon { font-size: 24px; }
+    .dl-info .dl-fmt { font-family: var(--mono); font-size: 13px; color: var(--teal); font-weight: 600; }
+    .dl-info .dl-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Transcript preview ── */
+    #preview-toggle {
+      background: none;
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 16px;
+    }
+    #preview-toggle:hover { border-color: var(--teal); color: var(--teal); }
+
+    #transcript-preview {
+      display: none;
+      margin-top: 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius);
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    #transcript-preview.visible { display: block; }
+
+    .utt-row { margin-bottom: 14px; }
+    .utt-ts { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+    .utt-speaker { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+    .utt-text { font-size: 14px; padding-left: 12px; color: var(--text); border-left: 2px solid; }
+
+    /* ── Summary ── */
+    .summary-box {
+      background: var(--teal-faint);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-top: 16px;
+    }
+
+    .summary-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--teal);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .summary-text { font-size: 14px; color: var(--text); line-height: 1.7; white-space: pre-line; }
+
+    /* ── New transcription link ── */
+    #new-btn {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--mono); font-size: 12px;
+      padding: 8px 16px; cursor: pointer;
+      transition: all 0.15s; margin-top: 12px;
+    }
+    #new-btn:hover { border-color: var(--teal); color: var(--teal); }
+    #new-btn.visible { display: inline-block; }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(248,113,113,0.07);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      color: #f87171;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--text-faint);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+
+    footer span { color: var(--teal); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--teal-dim); }
+
+    /* ── Divider ── */
+    .divider {
+      border: none; border-top: 1px solid var(--border-dim); margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-mark">
+      <div class="logo-icon">🎙</div>
+      <div class="logo-text">v1.0.0</div>
+    </div>
+    <h1>Minutes<br/><span>in Seconds.</span></h1>
+    <p class="subtitle">Speaker-diarized transcription for meetings and lectures. English & Mandarin.</p>
+    <div class="pills">
+      <div class="pill">EN + ZH</div>
+      <div class="pill">Speaker Detection</div>
+      <div class="pill">TXT · DOCX · PDF</div>
+      <div class="pill">AI Cleanup</div>
+    </div>
+  </header>
+
+  <!-- Upload card -->
+  <div class="card" id="upload-card">
+    <div class="card-title">// Upload Recording</div>
+
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dz-icon">📁</div>
+      <div class="dz-title">Drop your file here</div>
+      <div class="dz-sub">or click to browse</div>
+      <div class="dz-formats">MP4 · MP3 · WAV · M4A · MKV · MOV · OGG · FLAC</div>
+    </div>
+    <input type="file" id="file-input" accept=".mp3,.mp4,.wav,.m4a,.mkv,.mov,.ogg,.flac,.webm" />
+
+    <div class="file-chosen" id="file-chosen">
+      <div class="fc-icon">🎵</div>
+      <div>
+        <div class="fc-name" id="fc-name">—</div>
+        <div class="fc-size" id="fc-size">—</div>
+      </div>
+      <button class="fc-remove" onclick="clearFile()" title="Remove">✕</button>
+    </div>
+
+    <hr class="divider" style="margin: 22px 0;" />
+    <div class="card-title">// Settings</div>
+
+    <div class="settings-grid">
+
+      <div class="field full">
+        <label>Title</label>
+        <input type="text" id="title-input" placeholder="e.g. Team Standup 14 Apr" />
+      </div>
+
+      <div class="field">
+        <label>Whisper Model</label>
+        <select id="model-select">
+          <option value="tiny">Tiny — fastest, basic</option>
+          <option value="base">Base — fast, decent</option>
+          <option value="small">Small — good balance</option>
+          <option value="medium" selected>Medium ★ — recommended</option>
+          <option value="large-v3">Large v3 — best quality</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Number of Speakers</label>
+        <input type="number" id="speakers-input" min="1" max="20" placeholder="Auto-detect" />
+      </div>
+
+      <div class="field full">
+        <label>Output Format</label>
+        <div class="format-picker">
+          <div class="fmt-btn selected" data-fmt="txt">
+            <span class="fmt-icon">📄</span> TXT
+          </div>
+          <div class="fmt-btn" data-fmt="docx">
+            <span class="fmt-icon">📝</span> DOCX
+          </div>
+          <div class="fmt-btn" data-fmt="pdf">
+            <span class="fmt-icon">📑</span> PDF
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Options</label>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="toggle-row" onclick="toggleSwitch('cleanup-toggle')">
+            <div>
+              <div class="toggle-label">AI Cleanup + Summary</div>
+              <div class="toggle-desc">Claude Haiku fixes punctuation & generates summary</div>
+            </div>
+            <div class="toggle-switch on" id="cleanup-toggle"></div>
+          </div>
+          <div class="toggle-row" onclick="toggleSwitch('denoise-toggle')">
+            <div>
+              <div class="toggle-label">Noise Reduction</div>
+              <div class="toggle-desc">Spectral denoising for noisy recordings</div>
+            </div>
+            <div class="toggle-switch" id="denoise-toggle"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /settings-grid -->
+
+    <hr class="divider" />
+
+    <button id="submit-btn" disabled onclick="startJob()">
+      Transcribe →
+    </button>
+  </div><!-- /upload-card -->
+
+  <!-- Progress card -->
+  <div class="card" id="progress-card">
+    <div class="progress-header">
+      <div class="progress-filename" id="progress-filename">—</div>
+      <div class="status-badge processing" id="status-badge">PROCESSING</div>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+    <div class="progress-step" id="progress-step">Initialising...</div>
+    <button id="cancel-btn" onclick="cancelJob()">Cancel</button>
+  </div>
+
+  <!-- Results card -->
+  <div class="card" id="results-card">
+    <div class="card-title">// Transcript Ready</div>
+
+    <!-- Speaker renaming -->
+    <div class="speakers-section" id="speakers-section">
+      <label style="display:block;margin-bottom:10px;">Rename Speakers</label>
+      <div class="speakers-grid" id="speakers-grid"></div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Downloads -->
+    <label style="display:block;margin-bottom:12px;">Download</label>
+    <div class="downloads-grid" id="downloads-grid"></div>
+
+    <!-- Preview toggle -->
+    <button id="preview-toggle" onclick="togglePreview()">Show Transcript Preview ↓</button>
+
+    <!-- Summary -->
+    <div class="summary-box" id="summary-box" style="display:none">
+      <div class="summary-title">// AI Summary</div>
+      <div class="summary-text" id="summary-text"></div>
+    </div>
+
+    <!-- Transcript preview -->
+    <div id="transcript-preview"></div>
+
+    <button id="new-btn" class="visible" onclick="resetApp()">← New Transcription</button>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  <span>Minutes in Seconds</span> · built by TheBooleanJulian
+</footer>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let selectedFile = null;
+  let selectedFormats = new Set(['txt']);
+  let currentJobId = null;
+  let pollInterval = null;
+  let currentJobData = null;   // cached last status response
+
+  const SPEAKER_COLORS = ['#00d4c8','#63b3ed','#f687b3','#fcb040','#9a75ea','#68d391'];
+
+  // ── File input ─────────────────────────────────────────────────────────────
+  const fileInput = document.getElementById('file-input');
+  const dropZone  = document.getElementById('drop-zone');
+  const fileChosen = document.getElementById('file-chosen');
+
+  fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+  });
+
+  function setFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    document.getElementById('fc-name').textContent = file.name;
+    document.getElementById('fc-size').textContent = formatBytes(file.size);
+    fileChosen.classList.add('visible');
+    document.getElementById('submit-btn').disabled = false;
+    if (!document.getElementById('title-input').value)
+      document.getElementById('title-input').value = file.name.replace(/\.[^.]+$/, '');
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileChosen.classList.remove('visible');
+    document.getElementById('submit-btn').disabled = true;
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  }
+
+  // ── Format picker ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.fmt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fmt = btn.dataset.fmt;
+      if (selectedFormats.has(fmt)) {
+        if (selectedFormats.size === 1) return; // at least one must be selected
+        selectedFormats.delete(fmt);
+        btn.classList.remove('selected');
+      } else {
+        selectedFormats.add(fmt);
+        btn.classList.add('selected');
+      }
+    });
+  });
+
+  // ── Toggle switches ────────────────────────────────────────────────────────
+  function toggleSwitch(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('on');
+  }
+
+  // ── Start job ──────────────────────────────────────────────────────────────
+  async function startJob() {
+    if (!selectedFile) return;
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+    form.append('title', document.getElementById('title-input').value.trim());
+    form.append('model', document.getElementById('model-select').value);
+    const spk = document.getElementById('speakers-input').value;
+    if (spk) form.append('speakers', spk);
+    form.append('output_formats', [...selectedFormats].join(','));
+    form.append('denoise', document.getElementById('denoise-toggle').classList.contains('on'));
+    form.append('cleanup', document.getElementById('cleanup-toggle').classList.contains('on'));
+
+    document.getElementById('upload-card').style.display = 'none';
+    document.getElementById('progress-card').classList.add('visible');
+    document.getElementById('progress-filename').textContent = selectedFile.name;
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      currentJobId = data.job_id;
+      pollInterval = setInterval(pollStatus, 1200);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  // ── Polling ────────────────────────────────────────────────────────────────
+  async function pollStatus() {
+    if (!currentJobId) return;
+    try {
+      const res = await fetch(`/api/status/${currentJobId}`);
+      const data = await res.json();
+      currentJobData = data;
+
+      document.getElementById('progress-bar').style.width = data.progress + '%';
+      document.getElementById('progress-step').textContent = data.step;
+
+      if (data.status === 'done') {
+        clearInterval(pollInterval);
+        showResults(data);
+      } else if (data.status === 'error') {
+        clearInterval(pollInterval);
+        showError(data.error || 'Unknown error');
+      } else if (data.status === 'cancelled') {
+        clearInterval(pollInterval);
+        showCancelled();
+      }
+    } catch (e) {
+      console.error('Poll error:', e);
+    }
+  }
+
+  // ── Cancel ─────────────────────────────────────────────────────────────────
+  async function cancelJob() {
+    if (!currentJobId) return;
+    await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
+  }
+
+  function showCancelled() {
+    const badge = document.getElementById('status-badge');
+    badge.textContent = 'CANCELLED';
+    badge.className = 'status-badge cancelled';
+    document.getElementById('progress-step').textContent = 'Job cancelled.';
+    document.getElementById('cancel-btn').style.display = 'none';
+    document.getElementById('new-btn').classList.add('visible');
+    document.getElementById('results-card').classList.add('visible');
+    document.getElementById('progress-card').classList.remove('visible');
+  }
+
+  // ── Show results ───────────────────────────────────────────────────────────
+  function showResults(data) {
+    const badge = document.getElementById('status-badge');
+    badge.textContent = 'DONE';
+    badge.className = 'status-badge done';
+    document.getElementById('cancel-btn').style.display = 'none';
+    document.getElementById('progress-card').style.opacity = '0.6';
+
+    // Build speaker labels
+    const speakersGrid = document.getElementById('speakers-grid');
+    speakersGrid.innerHTML = '';
+    const speakers = data.speakers || {};
+    const spkIds = Object.keys(speakers);
+
+    if (spkIds.length === 0) {
+      document.getElementById('speakers-section').style.display = 'none';
+    } else {
+      spkIds.forEach((sid, i) => {
+        const color = SPEAKER_COLORS[i % SPEAKER_COLORS.length];
+        const row = document.createElement('div');
+        row.className = 'speaker-row';
+        row.innerHTML = `
+          <div class="speaker-dot" style="background:${color}"></div>
+          <input type="text" id="spk-${sid}" value="${speakers[sid]}" style="color:${color}" />
+          <button class="speaker-save-btn" onclick="renameSpeaker('${sid}')">Save</button>
+        `;
+        speakersGrid.appendChild(row);
+      });
+    }
+
+    // Downloads
+    const grid = document.getElementById('downloads-grid');
+    grid.innerHTML = '';
+    const fmtMeta = {
+      txt:  { icon: '📄', label: 'TXT', desc: 'Plain text transcript' },
+      docx: { icon: '📝', label: 'DOCX', desc: 'Formatted Word document' },
+      pdf:  { icon: '📑', label: 'PDF', desc: 'Styled PDF export' },
+    };
+    (data.outputs || []).forEach(fmt => {
+      const m = fmtMeta[fmt] || { icon: '📁', label: fmt.toUpperCase(), desc: '' };
+      const a = document.createElement('a');
+      a.className = 'dl-btn';
+      a.href = `/api/download/${currentJobId}/${fmt}`;
+      a.download = '';
+      a.innerHTML = `
+        <span class="dl-icon">${m.icon}</span>
+        <div class="dl-info">
+          <div class="dl-fmt">${m.label}</div>
+          <div class="dl-desc">${m.desc}</div>
+        </div>
+      `;
+      grid.appendChild(a);
+    });
+
+    document.getElementById('results-card').classList.add('visible');
+
+    // Fetch full data for preview/summary
+    fetchTranscriptPreview();
+  }
+
+  async function fetchTranscriptPreview() {
+    // We'll use the TXT download to build a quick preview
+    // Actually let's just show status data — no separate preview endpoint needed for MVP
+    // The preview will be built from the txt download on demand
+  }
+
+  // ── Speaker rename ─────────────────────────────────────────────────────────
+  async function renameSpeaker(speakerId) {
+    const input = document.getElementById(`spk-${speakerId}`);
+    const name = input.value.trim();
+    if (!name) return;
+    const form = new FormData();
+    form.append('speaker_id', speakerId);
+    form.append('name', name);
+    const res = await fetch(`/api/rename-speaker/${currentJobId}`, { method: 'POST', body: form });
+    if (res.ok) {
+      input.style.transition = 'opacity 0.2s';
+      input.style.opacity = '0.5';
+      setTimeout(() => input.style.opacity = '1', 400);
+    }
+  }
+
+  // ── Preview toggle ─────────────────────────────────────────────────────────
+  let previewLoaded = false;
+  let previewOpen = false;
+
+  async function togglePreview() {
+    const preview = document.getElementById('transcript-preview');
+    previewOpen = !previewOpen;
+    document.getElementById('preview-toggle').textContent =
+      previewOpen ? 'Hide Transcript Preview ↑' : 'Show Transcript Preview ↓';
+
+    if (!previewLoaded && previewOpen) {
+      previewLoaded = true;
+      preview.innerHTML = '<div style="color:var(--text-muted);font-family:var(--mono);font-size:12px;padding:8px">Loading preview...</div>';
+      preview.classList.add('visible');
+
+      try {
+        const res = await fetch(`/api/download/${currentJobId}/txt`);
+        const text = await res.text();
+        renderTxtPreview(text, preview);
+
+        // Check for summary in txt
+        const summaryIdx = text.indexOf('SUMMARY\n' + '='.repeat(60));
+        if (summaryIdx !== -1) {
+          const summaryText = text.slice(summaryIdx + 70).trim();
+          document.getElementById('summary-text').textContent = summaryText;
+          document.getElementById('summary-box').style.display = 'block';
+        }
+      } catch (e) {
+        preview.innerHTML = '<div style="color:#f87171;font-size:12px">Preview unavailable — download the file instead.</div>';
+      }
+    } else {
+      preview.classList.toggle('visible', previewOpen);
+    }
+  }
+
+  function renderTxtPreview(text, container) {
+    const colors = SPEAKER_COLORS;
+    const speakerColorMap = {};
+    let colorIdx = 0;
+
+    const lines = text.split('\n');
+    let html = '';
+    let inTranscript = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith('======')) { inTranscript = true; continue; }
+      if (!inTranscript) continue;
+      if (line.startsWith('SUMMARY')) break;
+
+      // Match [MM:SS] Speaker N [LANG]:
+      const m = line.match(/^\[(\d+:\d+(?::\d+)?)\]\s+(.+?)\s*(?:\[(\w+)\])?:$/);
+      if (m) {
+        const ts = m[1], spk = m[2];
+        if (!speakerColorMap[spk]) speakerColorMap[spk] = colors[colorIdx++ % colors.length];
+        const color = speakerColorMap[spk];
+        const nextLine = lines[i+1]?.trim() || '';
+        html += `
+          <div class="utt-row">
+            <div class="utt-ts">${ts}</div>
+            <div class="utt-speaker" style="color:${color}">${spk}</div>
+            <div class="utt-text" style="border-color:${color}44">${escapeHtml(nextLine)}</div>
+          </div>
+        `;
+        i++; // skip speech line
+      }
+    }
+    container.innerHTML = html || '<div style="color:var(--text-muted);font-size:13px">No transcript lines found.</div>';
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Error ──────────────────────────────────────────────────────────────────
+  function showError(msg) {
+    document.getElementById('progress-card').classList.remove('visible');
+    const card = document.getElementById('results-card');
+    card.classList.add('visible');
+    card.innerHTML = `
+      <div class="card-title">// Error</div>
+      <div class="error-box">⚠ ${escapeHtml(msg)}</div>
+      <button id="new-btn" class="visible" style="margin-top:16px" onclick="resetApp()">← Try Again</button>
+    `;
+  }
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  function resetApp() {
+    currentJobId = null;
+    currentJobData = null;
+    clearInterval(pollInterval);
+    selectedFile = null;
+    fileInput.value = '';
+    previewLoaded = false;
+    previewOpen = false;
+
+    document.getElementById('upload-card').style.display = '';
+    document.getElementById('upload-card').style.opacity = '1';
+    document.getElementById('progress-card').classList.remove('visible');
+    document.getElementById('progress-card').style.opacity = '1';
+    document.getElementById('results-card').classList.remove('visible');
+    document.getElementById('results-card').innerHTML = `
+      <div class="card-title">// Transcript Ready</div>
+      <div class="speakers-section" id="speakers-section">
+        <label style="display:block;margin-bottom:10px;">Rename Speakers</label>
+        <div class="speakers-grid" id="speakers-grid"></div>
+      </div>
+      <hr class="divider"/>
+      <label style="display:block;margin-bottom:12px;">Download</label>
+      <div class="downloads-grid" id="downloads-grid"></div>
+      <button id="preview-toggle" onclick="togglePreview()">Show Transcript Preview ↓</button>
+      <div class="summary-box" id="summary-box" style="display:none">
+        <div class="summary-title">// AI Summary</div>
+        <div class="summary-text" id="summary-text"></div>
+      </div>
+      <div id="transcript-preview"></div>
+      <button id="new-btn" class="visible" onclick="resetApp()">← New Transcription</button>
+    `;
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-step').textContent = 'Initialising...';
+    document.getElementById('status-badge').textContent = 'PROCESSING';
+    document.getElementById('status-badge').className = 'status-badge processing';
+    document.getElementById('cancel-btn').style.display = '';
+    document.getElementById('file-chosen').classList.remove('visible');
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('title-input').value = '';
+  }
+</script>
+</body>
+</html>

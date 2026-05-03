@@ -1,0 +1,27 @@
+# Minutes in Seconds — Python dependencies
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# Transcription
+openai-whisper>=20231117
+
+# Speaker diarization (optional — needs HF_TOKEN)
+pyannote.audio>=3.1.0
+
+# Audio processing
+pydub>=0.25.1
+soundfile>=0.12.1
+noisereduce>=3.0.0
+
+# Document export
+python-docx>=1.1.0
+reportlab>=4.0.0
+
+# AI cleanup (optional — needs ANTHROPIC_API_KEY)
+anthropic>=0.40.0
+
+# Utilities
+tqdm>=4.66.0
