@@ -762,7 +762,11 @@
   let selectedFormats = new Set(['txt']);
   let currentJobId = null;
   let pollInterval = null;
-  let currentJobData = null;   // cached last status response
+  let currentJobData = null;
+  let pollErrorCount = 0;
+  let pollStartTime = null;
+  const MAX_POLL_ERRORS = 5;
+  const MAX_JOB_MS = 4 * 60 * 60 * 1000; // 4 hours
 
   const SPEAKER_COLORS = ['#00d4c8','#63b3ed','#f687b3','#fcb040','#9a75ea','#68d391'];
 
@@ -849,6 +853,8 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Upload failed');
       currentJobId = data.job_id;
+      pollStartTime = Date.now();
+      pollErrorCount = 0;
       pollInterval = setInterval(pollStatus, 1200);
     } catch (err) {
       showError(err.message);
@@ -858,8 +864,26 @@
   // ── Polling ────────────────────────────────────────────────────────────────
   async function pollStatus() {
     if (!currentJobId) return;
+
+    if (pollStartTime && Date.now() - pollStartTime > MAX_JOB_MS) {
+      clearInterval(pollInterval);
+      showError('Job timed out after 4 hours. The server may be stuck — please try again.');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/status/${currentJobId}`);
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          clearInterval(pollInterval);
+          showError('Job not found — the server likely restarted and lost in-memory state. Please try again.');
+          return;
+        }
+        throw new Error(`Server returned ${res.status}`);
+      }
+
+      pollErrorCount = 0;
       const data = await res.json();
       currentJobData = data;
 
@@ -877,7 +901,12 @@
         showCancelled();
       }
     } catch (e) {
-      console.error('Poll error:', e);
+      pollErrorCount++;
+      console.error(`Poll error (${pollErrorCount}/${MAX_POLL_ERRORS}):`, e);
+      if (pollErrorCount >= MAX_POLL_ERRORS) {
+        clearInterval(pollInterval);
+        showError('Lost connection to the server after 5 failed attempts. Check that it is still running.');
+      }
     }
   }
 
@@ -1071,6 +1100,8 @@
     currentJobId = null;
     currentJobData = null;
     clearInterval(pollInterval);
+    pollErrorCount = 0;
+    pollStartTime = null;
     selectedFile = null;
     fileInput.value = '';
     previewLoaded = false;
