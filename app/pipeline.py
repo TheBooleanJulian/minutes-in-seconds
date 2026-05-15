@@ -351,20 +351,67 @@ TRANSCRIPT:
         if new_utts:
             transcript.utterances = new_utts
 
-        cb("Generating meeting summary...", 92)
-        summary = client.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=512,
-            messages=[{"role": "user", "content": f"""Summarise this meeting/lecture transcript in 3-5 bullet points.
-Cover: main topics, key decisions, action items.
-Use plain text bullet points starting with •, no markdown.
-
-TRANSCRIPT:
-{raw_text[:6000]}"""}]
-        )
-        transcript.summary = summary.content[0].text.strip()
-
     except Exception as e:
         print(f"AI cleanup failed: {e}")
 
     return transcript
+
+
+# ─── Structured AI summary ────────────────────────────────────────────────────
+
+def ai_summarize_with_template(transcript: Transcript, keypoints: list) -> dict:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {"error": "ANTHROPIC_API_KEY not set"}
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+
+        raw_text = "\n".join(
+            f"[{fmt_time(utt.start)}] {transcript.speakers.get(utt.speaker, utt.speaker)}: {utt.text}"
+            for utt in transcript.utterances
+        )
+        kp_str = "\n".join(f"- {kp}" for kp in keypoints)
+
+        response = client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": f"""Extract and summarize these keypoints from the transcript. For each keypoint provide 2-5 concise bullet points.
+
+Keypoints:
+{kp_str}
+
+Format exactly like this (one block per keypoint):
+### [Keypoint Name]
+• point 1
+• point 2
+
+TRANSCRIPT:
+{raw_text[:8000]}"""}]
+        )
+
+        text = response.content[0].text.strip()
+        result = {}
+        current_key = None
+        current_bullets: list = []
+
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("### "):
+                if current_key is not None:
+                    result[current_key] = "\n".join(current_bullets)
+                current_key = line[4:].strip()
+                current_bullets = []
+            elif line.startswith(("•", "-", "*")) and current_key is not None:
+                current_bullets.append(line)
+            elif line and current_key is not None and not line.startswith("#"):
+                current_bullets.append("• " + line)
+
+        if current_key is not None:
+            result[current_key] = "\n".join(current_bullets)
+
+        return result
+
+    except Exception as e:
+        return {"error": str(e)}

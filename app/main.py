@@ -17,8 +17,9 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from app.pipeline import run_pipeline, ai_cleanup_transcript, JOB_CANCELLED
+from app.pipeline import run_pipeline, ai_cleanup_transcript, ai_summarize_with_template, JOB_CANCELLED
 from app.exporters import export_txt, export_docx, export_pdf
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -188,6 +189,26 @@ async def download(job_id: str, fmt: str):
         media_type=media_types.get(fmt, "application/octet-stream"),
         filename=f"{stem}_transcript.{fmt}",
     )
+
+
+class SummarizeRequest(BaseModel):
+    keypoints: list[str]
+
+
+@app.post("/api/summarize/{job_id}")
+async def summarize(job_id: str, req: SummarizeRequest):
+    """Generate a structured AI summary from a chosen keypoints template."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if not job.get("transcript"):
+        raise HTTPException(400, "Transcript not ready yet")
+    if not req.keypoints:
+        raise HTTPException(400, "No keypoints provided")
+
+    structured = ai_summarize_with_template(job["transcript"], req.keypoints)
+    job["structured_summary"] = structured
+    return {"summary": structured}
 
 
 @app.get("/api/jobs")
