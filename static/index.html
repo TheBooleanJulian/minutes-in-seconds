@@ -399,11 +399,26 @@
 
     @keyframes shimmer { 0%,100% { opacity:0 } 50% { opacity:1 } }
 
-    .progress-step {
-      font-size: 12px;
+    /* ── Console log ── */
+    #progress-console {
+      background: #03050a;
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      max-height: 180px;
+      overflow-y: auto;
       font-family: var(--mono);
-      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.6;
     }
+
+    .console-line { display: flex; gap: 8px; }
+    .console-ts { color: var(--text-faint); flex-shrink: 0; }
+    .console-msg { color: var(--text-muted); word-break: break-word; }
+    .console-line.info .console-msg { color: var(--text); }
+    .console-line.error .console-msg { color: #f87171; }
+    .console-line.success .console-msg { color: #4ade80; }
 
     #cancel-btn {
       background: none;
@@ -830,7 +845,7 @@
     <div class="progress-bar-wrap">
       <div class="progress-bar" id="progress-bar" style="width:0%"></div>
     </div>
-    <div class="progress-step" id="progress-step">Initialising...</div>
+    <div id="progress-console"></div>
     <button id="cancel-btn" onclick="cancelJob()">Cancel</button>
   </div>
 
@@ -902,6 +917,7 @@
   let currentJobData = null;
   let pollErrorCount = 0;
   let pollStartTime = null;
+  let lastLoggedStep = null;
   const MAX_POLL_ERRORS = 5;
   const MAX_JOB_MS = 4 * 60 * 60 * 1000; // 4 hours
 
@@ -915,6 +931,23 @@
 
   let currentTemplate = 'meeting';
   let currentKeypoints = [...TEMPLATES.meeting.keypoints];
+
+  // ── Console log ───────────────────────────────────────────────────────────
+  function logLine(msg, type = 'muted') {
+    const consoleEl = document.getElementById('progress-console');
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const row = document.createElement('div');
+    row.className = `console-line ${type}`;
+    row.innerHTML = `<span class="console-ts">[${ts}]</span><span class="console-msg"></span>`;
+    row.querySelector('.console-msg').textContent = msg;
+    consoleEl.appendChild(row);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  function clearConsole() {
+    document.getElementById('progress-console').innerHTML = '';
+    lastLoggedStep = null;
+  }
 
   const SPEAKER_COLORS = ['#00d4c8','#63b3ed','#f687b3','#fcb040','#9a75ea','#68d391'];
 
@@ -995,16 +1028,20 @@
     document.getElementById('upload-card').style.display = 'none';
     document.getElementById('progress-card').classList.add('visible');
     document.getElementById('progress-filename').textContent = selectedFile.name;
+    clearConsole();
+    logLine(`Uploading "${selectedFile.name}" (${formatBytes(selectedFile.size)})...`, 'info');
 
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Upload failed');
       currentJobId = data.job_id;
+      logLine(`Job started — id ${data.job_id}`, 'success');
       pollStartTime = Date.now();
       pollErrorCount = 0;
       pollInterval = setInterval(pollStatus, 1200);
     } catch (err) {
+      logLine(`Upload failed: ${err.message}`, 'error');
       showError(err.message);
     }
   }
@@ -1036,21 +1073,29 @@
       currentJobData = data;
 
       document.getElementById('progress-bar').style.width = data.progress + '%';
-      document.getElementById('progress-step').textContent = data.step;
+
+      if (data.step !== lastLoggedStep) {
+        logLine(`${data.step} (${data.progress}%)`, 'info');
+        lastLoggedStep = data.step;
+      }
 
       if (data.status === 'done') {
         clearInterval(pollInterval);
+        logLine('Job complete.', 'success');
         showResults(data);
       } else if (data.status === 'error') {
         clearInterval(pollInterval);
+        logLine(`Error: ${data.error || 'Unknown error'}`, 'error');
         showError(data.error || 'Unknown error');
       } else if (data.status === 'cancelled') {
         clearInterval(pollInterval);
+        logLine('Job cancelled.', 'error');
         showCancelled();
       }
     } catch (e) {
       pollErrorCount++;
       console.error(`Poll error (${pollErrorCount}/${MAX_POLL_ERRORS}):`, e);
+      logLine(`Poll error (${pollErrorCount}/${MAX_POLL_ERRORS}): ${e.message}`, 'error');
       if (pollErrorCount >= MAX_POLL_ERRORS) {
         clearInterval(pollInterval);
         showError('Lost connection to the server after 5 failed attempts. Check that it is still running.');
@@ -1061,6 +1106,7 @@
   // ── Cancel ─────────────────────────────────────────────────────────────────
   async function cancelJob() {
     if (!currentJobId) return;
+    logLine('Cancelling job...', 'info');
     await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
   }
 
@@ -1068,7 +1114,6 @@
     const badge = document.getElementById('status-badge');
     badge.textContent = 'CANCELLED';
     badge.className = 'status-badge cancelled';
-    document.getElementById('progress-step').textContent = 'Job cancelled.';
     document.getElementById('cancel-btn').style.display = 'none';
     document.getElementById('new-btn').classList.add('visible');
     document.getElementById('results-card').classList.add('visible');
@@ -1345,7 +1390,7 @@
       <button id="new-btn" class="visible" onclick="resetApp()">← New Transcription</button>
     `;
     document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('progress-step').textContent = 'Initialising...';
+    clearConsole();
     document.getElementById('status-badge').textContent = 'PROCESSING';
     document.getElementById('status-badge').className = 'status-badge processing';
     document.getElementById('cancel-btn').style.display = '';
