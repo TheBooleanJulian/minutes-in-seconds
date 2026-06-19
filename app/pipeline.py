@@ -89,6 +89,47 @@ def get_duration(wav_path: str) -> float:
     return float(info["format"]["duration"])
 
 
+# ─── Chunking for long files ──────────────────────────────────────────────────
+
+DEFAULT_CHUNK_SECONDS = 15 * 60  # split files longer than this into chunks
+
+
+def split_into_chunks(wav_path: str, tmp_dir: str, duration: float,
+                       chunk_sec: float = DEFAULT_CHUNK_SECONDS) -> list:
+    """Split a long wav into fixed-length chunks via ffmpeg stream-copy (no re-encode).
+
+    Keeps diarization/transcription working on bounded-size audio instead of
+    loading and processing a multi-hour file in one shot, which is what was
+    blowing past the job timeout on very large files.
+    """
+    if duration <= chunk_sec:
+        return [(wav_path, 0.0, duration)]
+
+    chunks_dir = os.path.join(tmp_dir, "chunks")
+    os.makedirs(chunks_dir, exist_ok=True)
+    pattern = os.path.join(chunks_dir, "chunk_%04d.wav")
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", wav_path,
+        "-f", "segment",
+        "-segment_time", str(chunk_sec),
+        "-c", "copy",
+        "-reset_timestamps", "1",
+        pattern,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg segmenting failed: {result.stderr[-500:]}")
+
+    chunk_files = sorted(Path(chunks_dir).glob("chunk_*.wav"))
+    chunks, offset = [], 0.0
+    for cf in chunk_files:
+        cdur = get_duration(str(cf))
+        chunks.append((str(cf), offset, cdur))
+        offset += cdur
+    return chunks
+
+
 # ─── Step 2: Optional denoising ───────────────────────────────────────────────
 
 def denoise_audio(wav_path: str, tmp_dir: str) -> str:
@@ -172,13 +213,15 @@ def load_whisper_model(model_size: str):
     return model
 
 
-def transcribe_segment(model, wav_path: str, start: float, end: float) -> tuple:
+def load_audio_segment(wav_path: str):
     try:
         from pydub import AudioSegment
     except ImportError:
         raise RuntimeError("pydub not installed. Run: pip install pydub")
+    return AudioSegment.from_wav(wav_path)
 
-    audio = AudioSegment.from_wav(wav_path)
+
+def transcribe_segment(model, audio, start: float, end: float) -> tuple:
     chunk = audio[int(start * 1000):int(end * 1000)]
     if len(chunk) < 500:
         return "", ""
@@ -243,49 +286,65 @@ def run_pipeline(
             wav_path = denoise_audio(wav_path, tmp_dir)
             cb("Noise reduction complete", 17)
 
-        # 3. Diarize
+        # 3. Split into manageable chunks for long files
+        chunks = split_into_chunks(wav_path, tmp_dir, duration)
+        if len(chunks) > 1:
+            cb(f"Split into {len(chunks)} chunks of ~{fmt_time(DEFAULT_CHUNK_SECONDS)} for processing", 20)
+
         hf_token = os.environ.get("HF_TOKEN")
-        if hf_token:
-            cb("Loading pyannote diarization model...", 18)
-        else:
-            cb("No HF_TOKEN — splitting into 30s chunks...", 18)
 
-        raw_segments = diarize(wav_path, num_speakers)
-        if raw_segments is None:
-            raw_segments = fallback_segments(duration)
-            cb(f"Split into {len(raw_segments)} × 30s chunks", 22)
-        else:
-            n_spk = len(set(s[0] for s in raw_segments))
-            cb(f"Detected {n_spk} speaker(s) — merging short turns...", 22)
-
-        raw_segments = merge_short_segments(raw_segments)
-        n = len(raw_segments)
-        speaker_map = build_speaker_map(raw_segments)
-        cb(f"{len(speaker_map)} speaker(s) · {n} segment(s) queued", 24)
-
-        # 4. Load Whisper
+        # 4. Load Whisper (once, reused across all chunks)
         if model_size in _whisper_model_cache:
-            cb(f"Whisper '{model_size}' already in memory", 26)
+            cb(f"Whisper '{model_size}' already in memory", 24)
         else:
-            cb(f"Loading Whisper '{model_size}' weights...", 25)
+            cb(f"Loading Whisper '{model_size}' weights...", 22)
         model = load_whisper_model(model_size)
-        cb(f"Whisper '{model_size}' ready", 28)
+        cb(f"Whisper '{model_size}' ready", 26)
 
-        # 5. Transcribe
+        # 5. Diarize + transcribe, chunk by chunk
         utterances = []
-        for i, (speaker, start, end) in enumerate(raw_segments):
-            pct = 28 + int((i / n) * 57)
-            label = speaker_map.get(speaker, speaker)
-            cb(f"[{fmt_time(start)} → {fmt_time(end)}] {label} · {i+1}/{n}", pct)
-            text, lang = transcribe_segment(model, wav_path, start, end)
-            if text:
-                utterances.append(Utterance(
-                    speaker=speaker,
-                    start=start,
-                    end=end,
-                    text=text,
-                    language=lang,
-                ))
+        all_raw_segments = []
+        n_chunks = len(chunks)
+        progress_span = 70.0  # 26 → 96
+
+        for ci, (chunk_path, offset, cdur) in enumerate(chunks):
+            chunk_base = 26 + (ci / n_chunks) * progress_span
+            chunk_span = progress_span / n_chunks
+
+            if hf_token:
+                cb(f"Chunk {ci+1}/{n_chunks} — diarizing...", int(chunk_base))
+                raw_segments = diarize(chunk_path, num_speakers)
+            else:
+                raw_segments = None
+
+            if raw_segments is None:
+                raw_segments = fallback_segments(cdur)
+            else:
+                # Speaker clusters are local to each chunk — namespace them so
+                # they don't collide with same-named clusters from other chunks.
+                raw_segments = [(f"chunk{ci}_{spk}", s, e) for spk, s, e in raw_segments]
+
+            raw_segments = merge_short_segments(raw_segments)
+            all_raw_segments.extend(raw_segments)
+
+            chunk_audio = load_audio_segment(chunk_path)
+            m = len(raw_segments)
+            for i, (speaker, start, end) in enumerate(raw_segments):
+                pct = int(chunk_base + (i / max(m, 1)) * chunk_span)
+                cb(f"[{fmt_time(offset + start)} → {fmt_time(offset + end)}] "
+                   f"chunk {ci+1}/{n_chunks} · seg {i+1}/{m}", pct)
+                text, lang = transcribe_segment(model, chunk_audio, start, end)
+                if text:
+                    utterances.append(Utterance(
+                        speaker=speaker,
+                        start=offset + start,
+                        end=offset + end,
+                        text=text,
+                        language=lang,
+                    ))
+
+        speaker_map = build_speaker_map(all_raw_segments)
+        cb(f"{len(speaker_map)} speaker(s) · {len(utterances)} utterance(s) transcribed", 96)
 
         return Transcript(
             title=title or source.stem,
