@@ -232,8 +232,8 @@ def transcribe_segment(model, audio, start: float, end: float) -> tuple:
         chunk.export(chunk_path, format="wav")
         result = model.transcribe(
             chunk_path,
-            language=None,          # auto-detect EN/ZH/code-switch
-            task="transcribe",
+            language=None,          # auto-detect source language
+            task="translate",       # always output English, regardless of spoken language
             temperature=0.0,
             word_timestamps=False,
             fp16=False,
@@ -245,6 +245,24 @@ def transcribe_segment(model, audio, start: float, end: float) -> tuple:
             os.unlink(chunk_path)
         except Exception:
             pass
+
+
+def merge_consecutive_utterances(utterances: list, max_gap: float = 3.0) -> list:
+    """Collapse consecutive same-speaker utterances into one turn so the
+    transcript flows as continuous dialogue instead of one block per
+    diarization segment."""
+    if not utterances:
+        return utterances
+
+    merged = [utterances[0]]
+    for utt in utterances[1:]:
+        prev = merged[-1]
+        if utt.speaker == prev.speaker and (utt.start - prev.end) <= max_gap:
+            prev.text = f"{prev.text} {utt.text}".strip()
+            prev.end = utt.end
+        else:
+            merged.append(utt)
+    return merged
 
 
 def build_speaker_map(segments: list) -> dict:
@@ -343,6 +361,7 @@ def run_pipeline(
                         language=lang,
                     ))
 
+        utterances = merge_consecutive_utterances(utterances)
         speaker_map = build_speaker_map(all_raw_segments)
         cb(f"{len(speaker_map)} speaker(s) · {len(utterances)} utterance(s) transcribed", 96)
 
@@ -387,7 +406,6 @@ def ai_cleanup_transcript(transcript: Transcript, progress_cb: Optional[Callable
 - Remove filler words (uh, um) unless meaningful
 - Fix obvious transcription errors using context
 - Do NOT change meaning, speaker order, or timestamps
-- Preserve Mandarin Chinese as-is
 - Return ONLY the cleaned lines, no preamble
 
 TRANSCRIPT:
