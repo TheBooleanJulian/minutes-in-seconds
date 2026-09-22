@@ -1,29 +1,55 @@
-# 🎙 Minutes in Seconds
+<div align="center">
 
-> Speaker-diarized transcription for meetings and lectures — English & Mandarin.
+# Minutes in Seconds
 
-Built with Whisper + pyannote + FastAPI. Deployable to Zeabur in minutes.
+**Speaker-diarized transcription for meetings and lectures — English & Mandarin, built with Whisper + pyannote + FastAPI.**
 
-![Stack](https://img.shields.io/badge/Python-3.11-blue) ![Framework](https://img.shields.io/badge/FastAPI-0.115-green) ![Model](https://img.shields.io/badge/Whisper-large--v3-orange) ![Deploy](https://img.shields.io/badge/Deploy-Zeabur-purple)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green)
+![Whisper](https://img.shields.io/badge/Whisper-large--v3-orange)
+![Deploy](https://img.shields.io/badge/Deploy-Zeabur-purple)
+![License](https://img.shields.io/badge/license-AGPLv3%20%2B%20Commercial-00D4C8.svg)
+
+</div>
 
 ---
 
-## ✨ Features
+## What it does
+
+Minutes in Seconds turns an audio or video recording into a clean, speaker-labelled transcript. Upload a file through the browser UI, and a background pipeline extracts audio, diarizes speakers, transcribes with Whisper (auto-detecting English/Mandarin per segment), optionally cleans it up and summarizes it with Claude Haiku, and exports the result as TXT, DOCX, or PDF.
+
+## Features
 
 | Feature | Details |
 |---|---|
-| 🗣 Speaker diarization | pyannote/speaker-diarization-3.1 — detects who spoke and when |
-| 🌐 English + Mandarin | Whisper auto-detects language per segment; handles code-switching |
-| 📄 3 export formats | TXT (plain), DOCX (colour-coded), PDF (styled) |
-| 🤖 AI cleanup | Claude Haiku cleans punctuation and generates a bullet-point summary |
-| 🔇 Noise reduction | Optional spectral denoising for noisy recordings |
-| ✏️ Speaker renaming | Rename "Speaker 1" → "Julian" from the web UI after transcription |
-| 🎥 Any audio/video | MP4, MKV, MOV, MP3, WAV, M4A via ffmpeg |
-| ⚡ Real-time progress | Polling-based live progress bar with step description |
+| Speaker diarization | pyannote/speaker-diarization-3.1 — detects who spoke and when |
+| English + Mandarin | Whisper auto-detects language per segment; handles code-switching |
+| 3 export formats | TXT (plain), DOCX (colour-coded), PDF (styled) |
+| AI cleanup | Claude Haiku cleans punctuation and generates a bullet-point summary |
+| Noise reduction | Optional spectral denoising for noisy recordings |
+| Speaker renaming | Rename "Speaker 1" → a real name from the web UI after transcription |
+| Any audio/video | MP4, MKV, MOV, MP3, WAV, M4A via ffmpeg |
+| Chunking | Long recordings are chunked to avoid transcription timeouts |
+| Real-time progress | Polling-based live progress bar with step-by-step console-style log |
 
----
+## Tech Stack
 
-## 🏗 Architecture
+| Layer | Choice |
+|---|---|
+| Backend | FastAPI (`app/main.py`) |
+| Transcription | OpenAI Whisper (`large-v3` recommended) |
+| Diarization | pyannote.audio (`speaker-diarization-3.1`) |
+| AI cleanup/summary | Claude Haiku (Anthropic) |
+| Audio | ffmpeg, optional `noisereduce` |
+| Exports | TXT / DOCX / PDF (`app/exporters.py`) |
+| Frontend | Single-file HTML (`static/index.html`), no build step |
+| Hosting | Zeabur (Docker) |
+
+## Screenshots
+
+_Screenshots coming soon._ The app is a single-page browser UI (`static/index.html`) with an upload form and a live progress log.
+
+## Architecture
 
 ```
 Browser (static/index.html)
@@ -45,9 +71,7 @@ exporters.py  →  TXT / DOCX / PDF
 GET /api/download/{job_id}/{fmt}
 ```
 
----
-
-## 🚀 Running Locally
+## Quick Start
 
 ### Prerequisites
 
@@ -67,13 +91,13 @@ pip install -r requirements.txt
 # 1. Create account at https://huggingface.co
 # 2. Get token at https://huggingface.co/settings/tokens
 # 3. Accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1
-export HF_TOKEN=hf_xxxxxxxxxxxx
+export HF_TOKEN=YOUR_HUGGINGFACE_TOKEN
 
 # Optional: AI cleanup + summary
-export ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx
+export ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
 ```
 
-### Start server
+### Run locally
 
 ```bash
 uvicorn app.main:app --reload --port 8080
@@ -81,72 +105,37 @@ uvicorn app.main:app --reload --port 8080
 
 Open http://localhost:8080
 
----
+### Without API keys (degraded mode)
 
-## ☁️ Deploy to Zeabur
+- **No `HF_TOKEN`**: all speech assigned to "Speaker 1" in 30-second chunks. Transcription still works.
+- **No `ANTHROPIC_API_KEY`**: cleanup and summary steps are skipped. Transcription still works.
 
-### Step 1 — Push to GitHub
+## Deploy to Zeabur
 
-```bash
-git init
-git add .
-git commit -m "feat: initial commit — Minutes in Seconds"
-git remote add origin https://github.com/YOUR_USERNAME/minutes-in-seconds.git
-git push -u origin main
-```
-
-### Step 2 — Create Zeabur project
-
-1. Go to https://zeabur.com → **New Project**
-2. **Add Service** → **Git** → select your `minutes-in-seconds` repo
+1. Push this repo to GitHub
+2. [Zeabur Dashboard](https://zeabur.com) → **New Project** → **Add Service** → **Git** → select this repo
 3. Zeabur detects the `Dockerfile` automatically
+4. In **Variables**, add `HF_TOKEN` and `ANTHROPIC_API_KEY`
+5. Add a persistent volume mounted at `/app/.cache` to avoid re-downloading Whisper's model weights (~1.5GB) on every restart
+6. Deploy — Zeabur builds the Docker image and provisions a public URL
 
-### Step 3 — Set environment variables
+> **First startup note:** on cold start, Whisper downloads model weights (~800MB for `medium`, ~3GB for `large-v3`). This takes 1–5 minutes; subsequent starts use the cached volume.
 
-In the Zeabur service dashboard → **Variables** tab, add:
-
-| Variable | Value | Required? |
-|---|---|---|
-| `HF_TOKEN` | `hf_xxxx` | For speaker diarization |
-| `ANTHROPIC_API_KEY` | `sk-ant-xxxx` | For AI cleanup & summary |
-
-### Step 4 — Add persistent volume (recommended)
-
-To cache Whisper model weights between deployments (saves re-downloading ~1.5GB on restart):
-
-1. Zeabur service → **Volumes** tab
-2. Add volume: mount path `/app/.cache`
-
-### Step 5 — Deploy
-
-Click **Deploy**. Zeabur builds the Docker image and provisions a public URL.
-
-> **First startup note:** On cold start, Whisper downloads the model weights (~800MB for `medium`, ~3GB for `large-v3`). This takes 1–5 minutes. Subsequent starts use the cached volume.
-
----
-
-## ⚙️ Configuration
+## Configuration
 
 ### Whisper model sizes
 
 | Model | Size | EN Quality | ZH Quality | Speed |
 |---|---|---|---|---|
-| `tiny` | 75MB | ⭐⭐ | ⭐ | Very fast |
-| `base` | 145MB | ⭐⭐⭐ | ⭐⭐ | Fast |
-| `small` | 480MB | ⭐⭐⭐⭐ | ⭐⭐⭐ | Medium |
-| **`medium`** ★ | 1.5GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Medium |
-| `large-v3` | 3GB | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Slow |
+| `tiny` | 75MB | Low | Very low | Very fast |
+| `base` | 145MB | Fair | Low | Fast |
+| `small` | 480MB | Good | Fair | Medium |
+| **`medium`** ★ | 1.5GB | Good | Good | Medium |
+| `large-v3` | 3GB | Best | Best | Slow |
 
 `medium` is recommended for production — good accuracy, reasonable memory.
 
-### Without API keys (degraded mode)
-
-- **No `HF_TOKEN`**: All speech assigned to "Speaker 1" in 30-second chunks. Transcription still works.
-- **No `ANTHROPIC_API_KEY`**: Cleanup and summary steps are skipped. Transcription still works.
-
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 minutes-in-seconds/
@@ -167,20 +156,13 @@ minutes-in-seconds/
 └── README.md
 ```
 
----
-
-## 🌐 Mandarin Notes
+## Mandarin Notes
 
 - Whisper outputs **Simplified Chinese** by default
-- For **Traditional Chinese**, post-process with `opencc`:
-  ```bash
-  pip install opencc-python-reimplemented
-  ```
+- For **Traditional Chinese**, post-process with `opencc` (`pip install opencc-python-reimplemented`)
 - **Code-switching** (Singlish + Mandarin) handled via `language=None` in Whisper — it auto-detects per segment
 
----
-
-## 📄 API Reference
+## API Reference
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -192,18 +174,36 @@ minutes-in-seconds/
 | `/api/download/{job_id}/{fmt}` | GET | Download TXT/DOCX/PDF |
 | `/api/jobs` | GET | List all jobs |
 
+## Status / Roadmap
+
+- [x] Speaker diarization + Whisper transcription with English/Mandarin auto-detection
+- [x] TXT / DOCX / PDF export
+- [x] Claude Haiku cleanup + bullet-point summary
+- [x] Real-time polling progress with step-by-step log
+- [x] Chunking for long recordings (avoids transcription timeouts)
+- [x] Speaker renaming from the web UI
+- [ ] Real-time WebSocket progress (replace polling)
+- [ ] Persistent job history (SQLite)
+- [ ] Timestamp editing in the browser
+- [ ] Real-time transcription for live calls
+
+## Changelog
+
+- **2026-08-18** — Chunk long recordings and always translate to English
+- **2026-06-19** — Chunk large audio files to avoid transcription timeouts
+- **2026-06-18** — Console-style progress log replacing single changing status line
+- **2026-05-15** — Template-based AI summary as a separate post-transcription step
+- **2026-05-04** — Granular pipeline progress reporting; fixed progress badge stuck in PROCESSING; initial release
+
+## License
+
+This project is dual licensed.
+
+- Community Edition — [GNU Affero General Public License v3 (AGPLv3)](LICENSE). Free to use, modify, and self-host. If you distribute a modified version or run it as a network service, you must make the corresponding source available.
+- Commercial License — for organisations that want to embed, modify, or distribute this software without AGPLv3's obligations. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
 ---
 
-## 🛣 Roadmap
-
-- [ ] V2: Real-time WebSocket progress (replace polling)
-- [ ] V2: Persistent job history (SQLite)
-- [ ] V2: Timestamp editing in the browser
-- [ ] V3: Real-time transcription for live calls
-- [ ] V3: Zoom / Google Meet integration
-
----
-
-## 📄 License
-
-MIT — built by [TheBooleanJulian](https://github.com/TheBooleanJulian)
+<div align="center">
+<sub>Built by <a href="https://github.com/TheBooleanJulian">@TheBooleanJulian</a></sub>
+</div>
