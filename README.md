@@ -110,14 +110,11 @@ Open http://localhost:8080
 - **No `HF_TOKEN`**: all speech assigned to "Speaker 1" in 30-second chunks. Transcription still works.
 - **No `ANTHROPIC_API_KEY`**: cleanup and summary steps are skipped. Transcription still works.
 
-## Deploy to Zeabur
+## Deploy
 
-1. Push this repo to GitHub
-2. [Zeabur Dashboard](https://zeabur.com) → **New Project** → **Add Service** → **Git** → select this repo
-3. Zeabur detects the `Dockerfile` automatically
-4. In **Variables**, add `HF_TOKEN` and `ANTHROPIC_API_KEY`
-5. Add a persistent volume mounted at `/app/.cache` to avoid re-downloading Whisper's model weights (~1.5GB) on every restart
-6. Deploy — Zeabur builds the Docker image and provisions a public URL
+Production runs on one VM (Oracle Cloud Always Free ARM first, Hetzner as the fallback) with Docker Compose and a
+Cloudflare Tunnel, no open ports: see [deploy/vm/README.md](deploy/vm/README.md). Whisper + pyannote are too heavy for
+Workers or Vercel. The Zeabur service stays up until the VM is verified, then it is terminated.
 
 > **First startup note:** on cold start, Whisper downloads model weights (~800MB for `medium`, ~3GB for `large-v3`). This takes 1–5 minutes; subsequent starts use the cached volume.
 
