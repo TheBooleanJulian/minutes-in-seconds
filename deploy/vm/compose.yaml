@@ -1,0 +1,30 @@
+# Minutes in Seconds on one VM (Oracle Cloud Always Free ARM, or Hetzner as the fallback).
+# Two containers: the app (the repo's own Dockerfile) and a Cloudflare Tunnel, so the VM opens no inbound ports.
+# Usage: see deploy/vm/README.md. Run from this folder: `docker compose up -d --build`.
+services:
+  app:
+    build:
+      context: ../..
+    restart: unless-stopped
+    env_file: .env            # HF_TOKEN, ANTHROPIC_API_KEY (both optional; see .env.example)
+    volumes:
+      - cache:/app/.cache       # Whisper / pyannote model weights (~1.5 GB), kept across rebuilds
+      - uploads:/app/uploads
+      - outputs:/app/outputs
+    # Not published on the host: only cloudflared reaches it, over the compose network.
+    expose:
+      - "8080"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+volumes:
+  cache:
+  uploads:
+  outputs:
